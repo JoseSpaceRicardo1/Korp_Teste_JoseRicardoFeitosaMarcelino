@@ -11,8 +11,8 @@ using SistemaFaturamento.API.Data;
 namespace SistemaFaturamento.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260412204122_FaturamentoAjustadoRecreation")]
-    partial class FaturamentoAjustadoRecreation
+    [Migration("20260415182847_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

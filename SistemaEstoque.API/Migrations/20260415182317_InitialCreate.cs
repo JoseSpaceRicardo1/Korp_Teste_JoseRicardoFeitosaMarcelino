@@ -5,7 +5,7 @@
 namespace SistemaEstoque.API.Migrations
 {
     /// <inheritdoc />
-    public partial class CriacaoInicialEstoque : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

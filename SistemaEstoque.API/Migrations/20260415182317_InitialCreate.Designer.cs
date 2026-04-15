@@ -11,8 +11,8 @@ using SistemaEstoque.API.Data;
 namespace SistemaEstoque.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260412054434_CriacaoInicialEstoque")]
-    partial class CriacaoInicialEstoque
+    [Migration("20260415182317_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

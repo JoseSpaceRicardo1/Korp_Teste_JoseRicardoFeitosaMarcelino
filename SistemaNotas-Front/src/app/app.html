@@ -1,8 +1,24 @@
-<nav style="padding: 10px; background: #eee; margin-bottom: 20px;">
-    <button routerLink="/produtos" style="margin-right: 10px;">Estoque</button>
-    <button routerLink="/nova-nota" style="margin-right: 10px;">Emitir Nota</button>
-    <button mat-button routerLink="/notas">Listar Notas</button>
-  </nav>
+<mat-toolbar color="primary">
+  <mat-icon style="margin-right: 8px;">receipt_long</mat-icon>
+  <span style="font-weight: 500;">Sistema de Notas Fiscais</span>
+  <span style="flex: 1;"></span>
+
+  <button mat-button routerLink="/produtos" routerLinkActive="nav-ativo">
+
+    <mat-icon>inventory_2</mat-icon>
+    Estoque
+  </button>
+
+  <button mat-button routerLink="/nova-nota" routerLinkActive="nav-ativo">
+    <mat-icon>add_circle_outline</mat-icon>
+    Emitir Nota
+  </button>
   
-  <router-outlet></router-outlet>
+  <button mat-button routerLink="/notas" routerLinkActive="nav-ativo">
+    <mat-icon>list_alt</mat-icon>
+    Listar Notas
+  </button>
+</mat-toolbar>
+
+<router-outlet></router-outlet>
 

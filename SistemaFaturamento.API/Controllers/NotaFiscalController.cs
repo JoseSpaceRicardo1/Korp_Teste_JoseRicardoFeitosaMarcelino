@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SistemaFaturamento.API.Controllers
@@ -19,30 +20,32 @@ namespace SistemaFaturamento.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
+        private static readonly SemaphoreSlim _semaforoImpressao = new SemaphoreSlim(1, 1);
 
-        public NotaFiscalController(AppDbContext context, IHttpClientFactory httpClientFactory)
+        public NotaFiscalController(AppDbContext context, IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _context = context;
             _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         // GET: api/NotaFiscal
         [HttpGet]
         public async Task<ActionResult<IEnumerable<NotaFiscal>>> GetNotasFiscais()
         {
-            return await _context.NotasFiscais.ToListAsync();
+            return await _context.NotasFiscais.Include(n => n.Itens).ToListAsync();
         }
 
         // GET: api/NotaFiscal/5
         [HttpGet("{id}")]
         public async Task<ActionResult<NotaFiscal>> GetNotaFiscal(int id)
         {
-            var notaFiscal = await _context.NotasFiscais.FindAsync(id);
+            var notaFiscal = await _context.NotasFiscais.Include(n => n.Itens).FirstOrDefaultAsync(n => n.Numero == id);
 
             if (notaFiscal == null)
-            {
-                return NotFound();
-            }
+
+                return NotFound("Nota fiscal não encontrada.");
 
             return notaFiscal;
         }
@@ -65,14 +68,11 @@ namespace SistemaFaturamento.API.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!NotaFiscalExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
+            
+                    if (!NotaFiscalExists(id))
+                        return NotFound();
                     throw;
-                }
+
             }
 
             return NoContent();
@@ -84,12 +84,11 @@ namespace SistemaFaturamento.API.Controllers
         public async Task<ActionResult<NotaFiscal>> PostNotaFiscal(NotaFiscal notaFiscal)
         {
             var maiorNumNota = await _context.NotasFiscais.MaxAsync(n => (int?)n.Numero) ?? 0;
-            
-            notaFiscal.Numero = maiorNumNota + 1;
 
+            notaFiscal.Numero = maiorNumNota + 1;
             notaFiscal.Status = StatusNota.Aberta;
 
-            foreach(var item in notaFiscal.Itens)
+            foreach (var item in notaFiscal.Itens)
             {
                 item.NotaFiscalId = notaFiscal.Numero;
             }
@@ -105,40 +104,58 @@ namespace SistemaFaturamento.API.Controllers
         {
             var nota = await _context.NotasFiscais.Include(n => n.Itens).FirstOrDefaultAsync(n => n.Numero == id);
 
-            if (nota == null) 
+            if (nota == null)
                 return NotFound("Nota não encontrada.");
 
-            if(nota.Status != StatusNota.Aberta)
+            if (nota.Status != StatusNota.Aberta)
                 return BadRequest("A nota fiscal deve estar com status 'Aberta' para ser impressa.");
 
-            var client = _httpClientFactory.CreateClient();
-
-            string estoqueUrl = "http://localhost:53313/api/Produtos/baixa-estoque/";
+            bool acquiredSemaphore = await _semaforoImpressao.WaitAsync(TimeSpan.FromSeconds(10));
+            if (!acquiredSemaphore)
+                return StatusCode(503, "Servidor ocupado processando outra impressão. Tente novamente em instantes.");
 
             try
             {
-                foreach (var item in nota.Itens)
-                {
-                    var response = await client.PutAsJsonAsync($"{estoqueUrl}{item.ProdutoId}", item.Quantidade);
+                await _context.Entry(nota).ReloadAsync();
+                if (nota.Status != StatusNota.Aberta)
+                    return BadRequest("A nota já foi impressa por outra requisição simultânea.");
 
-                    if (!response.IsSuccessStatusCode)
+            var client = _httpClientFactory.CreateClient();
+
+
+            var estoqueBaseUrl = _configuration["EstoqueService:BaseUrl"];
+                string estoqueUrl = $"{estoqueBaseUrl}/api/Produtos/baixa-estoque/";
+
+                try
+                {
+                    foreach (var item in nota.Itens)
                     {
-                        var erro = await response.Content.ReadAsStringAsync();
-                        return StatusCode((int)response.StatusCode, $"Falha no Estoque: {erro}");
+                        var response = await client.PutAsJsonAsync($"{estoqueUrl}{item.ProdutoId}", item.Quantidade);
+
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            var erro = await response.Content.ReadAsStringAsync();
+                            return StatusCode((int)response.StatusCode, $"Falha no Estoque: {erro}");
+                        }
                     }
                 }
-            }
-            
-            catch (HttpRequestException)
+
+                catch (HttpRequestException)
             {
                 return StatusCode(503, "Serviço de Estoque indisponível.");
             }
 
-            nota.Status = StatusNota.Fechada;
-            await _context.SaveChangesAsync();
+                nota.Status = StatusNota.Fechada;
+                await _context.SaveChangesAsync();
 
-            return Ok( new { message = "Nota fiscal impressa e estoque atualizado com sucesso.", nota });
+                return Ok(new { message = "Nota fiscal impressa e estoque atualizado com sucesso.", nota });
+            }
+            finally
+            {
+                _semaforoImpressao.Release();
+            }
         }
+
 
         // DELETE: api/NotaFiscal/5
         [HttpDelete("{id}")]

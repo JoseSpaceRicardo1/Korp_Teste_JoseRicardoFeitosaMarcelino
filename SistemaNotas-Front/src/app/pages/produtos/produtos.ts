@@ -76,8 +76,8 @@ export class ProdutosComponent implements OnInit {
       this.mostrarErro('A descrição do produto é obrigatória.');
       return;
     }
-    if (this.novoProduto.saldo < 0) {
-      this.mostrarErro('O saldo não pode ser negativo.');
+    if (this.novoProduto.saldo <= 0) {
+      this.mostrarErro('O saldo não pode ser negativo, ou igual a zero.');
       return;
     }
 
